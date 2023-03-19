@@ -16,13 +16,29 @@ type OpenAIResponse struct {
 	} `json:"choices"`
 }
 
-// TODO: set to ENV
-const APIKey = "your-api-key"
 const Endpoint = "https://api.openai.com/v1/engines/davinci-codex/completions"
 
-// TODO: set path as ENV to write conversation.md
-
 func main() {
+	// 環境変数からAPIキーを取得
+	APIKey := os.Getenv("OPENAI_API_KEY")
+	if APIKey == "" {
+		// 環境変数が設定されていない場合、ユーザーにAPIキーを入力させる
+		fmt.Print("Enter your OpenAI API key: ")
+		reader := bufio.NewReader(os.Stdin)
+		APIKey, _ = reader.ReadString('\n')
+		APIKey = strings.TrimSpace(APIKey)
+	}
+
+	// 環境変数から保存ファイル名を取得
+	filename := os.Getenv("CONVERSATION_FILE")
+	if filename == "" {
+		// 環境変数が設定されていない場合、ユーザーにファイル名を入力させる
+		fmt.Print("Enter the filename for the conversation (e.g., conversation.md): ")
+		reader := bufio.NewReader(os.Stdin)
+		filename, _ = reader.ReadString('\n')
+		filename = strings.TrimSpace(filename)
+	}
+
 	// ユーザー入力を受け付けるためのリーダーを初期化
 	reader := bufio.NewReader(os.Stdin)
 
@@ -39,7 +55,7 @@ func main() {
 		conversation = append(conversation, fmt.Sprintf("You: %s\n", input))
 
 		// GPT-4に対話内容を送信し、応答を取得
-		responseText, err := sendRequest(strings.Join(conversation, ""))
+		responseText, err := sendRequest(APIKey, strings.Join(conversation, ""))
 		if err != nil {
 			fmt.Println("Error:", err)
 			continue
@@ -52,14 +68,14 @@ func main() {
 		conversation = append(conversation, fmt.Sprintf("GPT-4: %s\n", responseText))
 
 		// 対話内容をファイルに書き込む
-		err = ioutil.WriteFile("conversation.md", []byte(strings.Join(conversation, "")), 0644)
+		err = ioutil.WriteFile(filename, []byte(strings.Join(conversation, "")), 0644)
 		if err != nil {
 			fmt.Println("Error:", err)
 		}
 	}
 }
 
-func sendRequest(prompt string) (string, error) {
+func sendRequest(APIKey, prompt string) (string, error) {
 	// リクエストデータを作成
 	data := fmt.Sprintf(`{"prompt": "%s", "max_tokens": 100}`, prompt)
 	req, _ := http.NewRequest("POST", Endpoint, strings.NewReader(data))
