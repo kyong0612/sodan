@@ -16,8 +16,11 @@ type OpenAIResponse struct {
 	} `json:"choices"`
 }
 
+// TODO: set to ENV
 const APIKey = "your-api-key"
 const Endpoint = "https://api.openai.com/v1/engines/davinci-codex/completions"
+
+// TODO: set path as ENV to write conversation.md
 
 func main() {
 	// ユーザー入力を受け付けるためのリーダーを初期化
