@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/joho/godotenv"
 )
 
 type OpenAIResponse struct {
@@ -19,6 +21,9 @@ type OpenAIResponse struct {
 const Endpoint = "https://api.openai.com/v1/engines/davinci-codex/completions"
 
 func main() {
+
+	godotenv.Load(".env")
+
 	// 環境変数からAPIキーを取得
 	APIKey := os.Getenv("OPENAI_API_KEY")
 	if APIKey == "" {
