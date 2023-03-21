@@ -1,5 +1,9 @@
-OPENAI_API_KEY=your-api-key
-CONVERSATION_FILE=~/Desktop/conversation.md
+include .env
 
 run:
-	go build && .sodan
+	go build && ./sodan
+
+list-model:
+	curl https://api.openai.com/v1/models \
+	-H "Authorization: Bearer $(OPENAI_API_KEY)" \
+	| jq '.data | sort_by(.created) | map(.id)'
