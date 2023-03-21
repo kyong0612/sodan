@@ -2,32 +2,80 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/joho/godotenv"
 )
 
-type OpenAIResponse struct {
-	Choices []struct {
-		Text string `json:"text"`
-	} `json:"choices"`
+// see API-doc: https://platform.openai.com/docs/api-reference/models/list
+// see secret: https://platform.openai.com/account/api-keys
+type Model string
+
+const (
+	Turbo Model = "gpt-3.5-turbo"
+)
+
+func (m Model) String() string {
+	return string(m)
 }
 
-const Endpoint = "https://api.openai.com/v1/engines/davinci-codex/completions"
+type Role string
+
+const (
+	System    Role = "system"
+	User      Role = "user"
+	Assistant Role = "assistant"
+)
+
+// https://platform.openai.com/docs/guides/chat/instructing-chat-models
+type Message struct {
+	Role    `json:"role"`
+	Content string `json:"content"`
+}
+
+type OpenAIRequest struct {
+	Model       string    `json:"model"`
+	Messages    []Message `json:"messages"`
+	Prompt      string    `json:"prompt,omitempty"`
+	MaxTokens   int       `json:"max_tokens,omitempty"`
+	Temperature float64   `json:"temperature,omitempty"`
+}
+
+type OpenAIResponse struct {
+	Index   int    `json:"index"`
+	Object  string `json:"object"`
+	Created int    `json:"created"`
+	Choices []struct {
+		// Text  string `json:"text"`
+		Index int `json:"index"`
+		// Logprobs struct {
+		// } `json:"logprobs"`
+		Message      `json:"message"`
+		FinishReason string `json:"finish_reason"`
+	} `json:"choices"`
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage"`
+}
+
+const Endpoint = "https://api.openai.com/v1/chat/completions"
 
 func main() {
 
 	godotenv.Load(".env")
 
-	// 環境変数からAPIキーを取得
 	APIKey := os.Getenv("OPENAI_API_KEY")
 	if APIKey == "" {
-		// 環境変数が設定されていない場合、ユーザーにAPIキーを入力させる
 		fmt.Print("Enter your OpenAI API key: ")
 		reader := bufio.NewReader(os.Stdin)
 		APIKey, _ = reader.ReadString('\n')
@@ -37,42 +85,46 @@ func main() {
 	// 環境変数から保存ファイル名を取得
 	filename := os.Getenv("CONVERSATION_FILE")
 	if filename == "" {
-		// 環境変数が設定されていない場合、ユーザーにファイル名を入力させる
 		fmt.Print("Enter the filename for the conversation (e.g., conversation.md): ")
 		reader := bufio.NewReader(os.Stdin)
 		filename, _ = reader.ReadString('\n')
 		filename = strings.TrimSpace(filename)
 	}
 
-	// ユーザー入力を受け付けるためのリーダーを初期化
+	path := strings.Split(filename, "/")
+	if len(path) > 1 {
+		filename = strings.Join(path[:len(path)-1], "/") + "/" + time.Now().Format("2006-01-02-15:04:05-") + path[len(path)-1]
+	} else {
+		filename = time.Now().Format("2006-01-02-15:04:05-") + filename
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 
-	// 対話内容を保存するための変数
 	var conversation []string
 
+	model := Turbo
+	me := "You"
+	format := fmt.Sprintf("%%%ds", utf8.RuneCountInString(model.String())-utf8.RuneCountInString(me)+3)
+	me = fmt.Sprintf(format, me)
+
+	fmt.Print("\nWelcome to the OpenAI chatbot demo!\n\n")
 	for {
-		// ユーザーからの入力を受け取る
-		fmt.Print("You: ")
+		fmt.Print(me + ": ")
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(input)
 
-		// 入力を対話内容に追加
-		conversation = append(conversation, fmt.Sprintf("You: %s\n", input))
+		conversation = append(conversation, fmt.Sprintf(me+": %s\n", input))
 
-		// GPT-4に対話内容を送信し、応答を取得
-		responseText, err := sendRequest(APIKey, strings.Join(conversation, ""))
+		responseText, err := sendRequest(APIKey, model, "", strings.Join(conversation, ""))
 		if err != nil {
 			fmt.Println("Error:", err)
 			continue
 		}
 
-		// GPT-4からの応答を表示
-		fmt.Printf("GPT-4: %s\n", responseText)
+		fmt.Printf("%s: %s\n", model, responseText)
 
-		// 応答を対話内容に追加
-		conversation = append(conversation, fmt.Sprintf("GPT-4: %s\n", responseText))
+		conversation = append(conversation, fmt.Sprintf("%s: %s\n", model, responseText))
 
-		// 対話内容をファイルに書き込む
 		err = ioutil.WriteFile(filename, []byte(strings.Join(conversation, "")), 0644)
 		if err != nil {
 			fmt.Println("Error:", err)
@@ -80,14 +132,36 @@ func main() {
 	}
 }
 
-func sendRequest(APIKey, prompt string) (string, error) {
-	// リクエストデータを作成
-	data := fmt.Sprintf(`{"prompt": "%s", "max_tokens": 100}`, prompt)
-	req, _ := http.NewRequest("POST", Endpoint, strings.NewReader(data))
+func sendRequest(APIKey string, model Model, prompt, msg string) (string, error) {
+	data, err := json.Marshal(OpenAIRequest{
+		Model: string(Turbo),
+		Messages: []Message{
+			{
+				Role:    User,
+				Content: msg,
+			},
+		},
+		Prompt:      prompt,
+		Temperature: 0.2,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequest("POST", Endpoint, bytes.NewBuffer(data))
+	if err != nil {
+		return "", err
+	}
 
 	// APIキーを追加
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", APIKey))
 	req.Header.Add("Content-Type", "application/json")
+
+	// r, err := httputil.DumpRequest(req, true)
+	// if err != nil {
+	// 	return "", err
+	// }
+	// fmt.Printf("DEBUG:Request:\n%s\n\n", string(r))
 
 	// リクエストを送信
 	client := &http.Client{}
@@ -97,11 +171,29 @@ func sendRequest(APIKey, prompt string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	// 応答データを解析
+	// r, err := httputil.DumpResponse(resp, true)
+	// if err != nil {
+	// 	return "", err
+	// }
+	// fmt.Printf("DEBUG:Response:\n%s\n\n", string(r))
+
 	body, _ := ioutil.ReadAll(resp.Body)
 	var response OpenAIResponse
-	json.Unmarshal(body, &response)
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return "", err
+	}
+
+	// rally := len(response.Choices)
+
+	if len(response.Choices) == 0 {
+		return "", fmt.Errorf("no response")
+	}
+
+	if strings.Contains(response.Choices[0].Message.Content, ":") {
+		response.Choices[0].Message.Content = strings.Split(response.Choices[0].Message.Content, ":")[1]
+	}
 
 	// 応答のテキストを返す
-	return strings.TrimSpace(response.Choices[0].Text), nil
+	return strings.TrimSpace(response.Choices[0].Message.Content), nil
 }
