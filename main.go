@@ -20,7 +20,7 @@ import (
 type Model string
 
 const (
-	Turbo Model = "gpt-3.5-turbo"
+	Turbo Model = "gpt-4"
 )
 
 func (m Model) String() string {
