@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -125,7 +125,7 @@ func main() {
 
 		conversation = append(conversation, fmt.Sprintf("%s: %s\n", model, responseText))
 
-		err = ioutil.WriteFile(filename, []byte(strings.Join(conversation, "")), 0644)
+		err = os.WriteFile(filename, []byte(strings.Join(conversation, "")), 0644)
 		if err != nil {
 			fmt.Println("Error:", err)
 		}
@@ -177,7 +177,7 @@ func sendRequest(APIKey string, model Model, prompt, msg string) (string, error)
 	// }
 	// fmt.Printf("DEBUG:Response:\n%s\n\n", string(r))
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	var response OpenAIResponse
 	err = json.Unmarshal(body, &response)
 	if err != nil {
