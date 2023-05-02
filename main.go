@@ -47,6 +47,7 @@ type OpenAIRequest struct {
 	Prompt      string    `json:"prompt,omitempty"`
 	MaxTokens   int       `json:"max_tokens,omitempty"`
 	Temperature float64   `json:"temperature,omitempty"`
+	Stream      bool      `json:"stream,omitempty"`
 }
 
 type OpenAIResponse struct {
