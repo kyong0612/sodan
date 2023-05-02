@@ -190,10 +190,10 @@ func sendRequest(APIKey string, model Model, prompt, msg string) (string, error)
 		return "", fmt.Errorf("no response")
 	}
 
-	if strings.Contains(response.Choices[0].Message.Content, ":") {
-		response.Choices[0].Message.Content = strings.Split(response.Choices[0].Message.Content, ":")[1]
+	if strings.Contains(response.Choices[0].Message.Content, "Assistant:") {
+		response.Choices[0].Message.Content = strings.TrimPrefix(response.Choices[0].Message.Content, "Assistant:")
 	}
 
 	// 応答のテキストを返す
-	return strings.TrimSpace(response.Choices[0].Message.Content), nil
+	return response.Choices[0].Message.Content, nil
 }
